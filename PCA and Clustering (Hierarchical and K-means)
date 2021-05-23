@@ -1,0 +1,130 @@
+#######################################################################################################
+################################# LAB 1 ###############################################################
+#######################################################################################################
+
+install.packages("rmarkdown") #Rmarkdown is an R package that export your R code to a doc/pdf/html file
+install.packages("tinytex") #Install the miktex
+install.packages("readr")
+
+library(readr)
+library(markdown)
+
+options(digitis=3)
+
+employment <- read.csv(file = "employment.csv", header=TRUE) #build the data frame
+read.csv("employment.csv", TRUE) #read the csv
+View(employment)
+employment=na.omit(employment) #omit missing values
+
+#FEEL THE DATA
+ls() #list the variables in my workspace
+head(employment,10) #show you the first 10 rows of the dataset
+tail(employment,10) #show you the last 10 rows of the dataset
+str(employment) #concise function for understanding the *str*ucture of your data
+
+summary(employment)
+#Produce some descriptive statistics (mean, standard deviation, min, max etc)
+apply(employment,2,sd) #get sd
+
+################################### PCA #########################################################
+employment.new=employment[,c(-1,-6)] # exclude age and commutime
+View(employment.new) #check
+
+#WITH SCALING/STANDARDIZING
+pr.out<-prcomp(employment.new,scale=TRUE) # Standardized
+#if we don't standardize then the variables with larger variance will
+# automatically have the largest weights
+pr.out$rotation #Get PC loadings
+
+#WITHOUT SCALING/STANDARDIZING
+pr.out.unsc=prcomp(employment.new,scale=FALSE)
+pr.out.unsc$rotation
+
+###PCA PLOT
+biplot (pr.out, scale =0, expand=1, xlabs=rep(".", nrow(employment.new)),col=c("blue","black"))
+
+###Screeplots
+pr.var=pr.out$sdev^2
+pve = pr.var/sum(pr.var) #pve as percentage of variance explained
+# Put two plots side by side
+par(mfrow=c(1,2))
+plot(pve,xlab="PC",ylab="% Variance Explained",ylim=c(0,1),type='b')
+plot(cumsum(pve),xlab="PC",ylab="Cumulative PVE",ylim=c(0,1),type='b')
+#No clear "elbow" identified. Keep the first 4 PCs, which in total explain more than 80% of the variance
+
+
+################################### CLUSTERING #############################################
+#Grouping employees based on all the 7 features
+
+#Since the clustering command involves random assignment of the initial clusters,
+# we use set.seed(5829) to keep results replicable.
+set.seed(5829)
+
+#draw 60 random individuals to form the new small dataset (substet of the original data)
+employeesmall=employment[sample(1:nrow(employment), 60,replace=FALSE),]
+
+sd.employee=scale(employeesmall) #scaling the variables (not always necessary, check context)
+#To scale or not to scale: It depends on what do you think is a "proper" measure of distance. 
+#If you think 1 km further contributes the same as 1 year longer, probably you do not need to scale. 
+#But if variables' units are not comparable and they are sensitive to the choice of metric units, you probably should scale it.
+
+##HIERARCHICAL CLUSTERING
+hc.average=hclust(dist(sd.employee),method="average")
+plot(hc.average,main="Average Linkage",xlab="",sub="",cex=.9) #dendrogram
+abline(h=3.6, col="blue") #adding straight lines to the plot
+
+#comparing methods
+par(mfrow=c(1,4))
+
+hc.single=hclust(dist(sd.employee),method="single")
+plot(hc.single,main="Single Linkage",xlab="",sub="",cex=.9) #dendrogram
+
+hc.complete=hclust(dist(sd.employee),method="complete")
+plot(hc.complete,main="Complete Linkage",xlab="",sub="",cex=.9) #dendrogram
+
+hc.centroid=hclust(dist(sd.employee),method="centroid")
+plot(hc.centroid,main="Centroid Linkage",xlab="",sub="",cex=.9) #dendrogram
+
+par(mfrow=c(1,1))
+
+hc.cluster=cutree(hc.average,h=3.6)
+max(hc.cluster) # max cluster 6
+# observation 4, 36 and 49 fall into cluster 3
+which(hc.cluster == 3)
+# 3 observations fall into cluster 3
+length(which(hc.cluster == 3))
+
+#Correlation as distance instead of Euclidean
+dd=as.dist(1-cor(t(sd.employee)))
+hc.corr=hclust(dd,method="average")
+plot(hc.corr,main="Average Linkage",xlab="",sub="",cex=.9)
+
+# we can prune the tree such that we will have 6 branches
+hc.cluster.cor=cutree(hc.corr,k=6)
+which(hc.cluster.cor == 3)
+length(which(hc.cluster.cor == 3))
+
+##K-MEANS CLUSTERING
+sd.employeefull=scale(employment) #scalling the data
+km.out=kmeans(sd.employeefull,3,nstart=50) #(dataset, #clusters,#random starts)
+#To make sure that we have reached clusters with smallest sum of squared distance we nstarts should be large.
+km.out$tot.withinss #Total within-cluster sum of squares, i.e. sum(withinss).
+
+plot(sd.employeefull[,2:3],col=(km.out$cluster+1),main="K-means Clustering results with K=3",pch=20) #plotting income against tenure
+#Interpreting the 3 groups: The bottom-left group might be those new to the jobs. They have relatively short tenure and low income.
+#The bottom-right group has short tenure but higher income. They might be job-hoppers, just moving to the current job with a
+# high salary. The group on the top might be those who stay in the job for a long time and earn a high salary.
+
+
+# CLEAN UP #################################################
+
+# Clear environment
+rm(list = ls()) 
+
+# Clear packages
+p_unload(all)  # Remove all add-ons
+
+# Clear console
+cat("\014")  # ctrl+L
+
+# Clear mind :)
