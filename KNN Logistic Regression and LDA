@@ -1,0 +1,274 @@
+#######################################################################################################
+################################# LAB 2 ###############################################################
+#######################################################################################################
+install.packages("ggplot")
+install.packages("class") #package for classification methods (namely, KNN, logistic regression and LDA)
+
+# load libraries
+library(ggplot2)
+library(class)
+
+##Generating a dataset
+n<-100
+# set sample size and seed (to ensure you get the same results when repeatedly running the code)
+set.seed(666)
+
+# generate X1, X2
+x1 <- rnorm(n) #generating normally distributed variables
+x2 <- 2*rnorm(n)
+# define parameters
+b1<-2
+b2<-3
+# linear combination (the term inside exponential in the question)
+z = b1*x1 + b2*x2
+# pass through an inv-logit function
+pr = 1/(1+exp(-z))
+# bernoulli response variable
+# first imput is nr of observation, second is number of bernoulli trials
+# and third one is probability of success in each trial (generating probabilities from binomial draws)
+y = as.factor(rbinom(n,1,pr))
+
+##Plot the data
+col.list <- c("blue","orange") #set color pallete
+palette(col.list)
+# when you say col = y, it encolors observations according to their category with the default colors we set above
+plot1<-plot(x1,x2, pch=1, col=y,cex=1.3, lwd=2)
+
+##ADDING BAYESIAN BOUNDARY
+#The Bayes decision boundary are the points x1 and x2 such that Pr(y = 1|x) = 0.5 (=) odds ratio=1 (=) log odds ratio=0 (=) z=0
+# Thus, x2= (-B1/B2) *x1 i.e., a line
+bayes= data.frame(x1,-b1*x1/b2) ## create a pair of x1 and x2 as a function of x1
+plot1<-plot(x1,x2, pch=1, col=y,cex=1.3, lwd=2) #re-doing graph
+lines(bayes, type="l", lty=2, lwd=2, col="purple") # adds the Bayes decision boundary
+
+##Test set
+g<-50
+# create a sequence starting from minimum of x1 till maximum of x1 with 50 elements
+x1test=seq(min(x1),max(x1), length.out=g)
+x2test<-seq(min(x2),max(x2), length.out=g)
+# train and test data
+train<-data.frame(x1,x2)
+test<- expand.grid(x1test, x2test)
+
+# An equivalent way to construct the test sample:
+# x1testg<-rep(x1test,g)
+# x2testg<-kronecker(x2test,rep(1,g))
+# test <-data.frame(x1testg,x2testg)
+
+##KNN ANALYSIS with K=15 nearest neighbors
+# scale the data. Don't scale Y!
+# we are scaling them because knn works according to distance between points, since x2 has a larger variance
+# it may be the case that they are in different units of measure
+s.train=scale(train)
+s.test=scale(test)
+mod15 <- knn(s.train, s.test,y, k=15, prob=TRUE)
+# setting "prob" as "true", the proportion of the votes for the winning class are returned
+# as attribute "prob". By default the "prob" is "false", and the attribute will be "null".
+
+# retrieve the proportion of the votes for the winning class for each observation
+prob15 <- attr(mod15, "prob")
+
+# get the probability of being in class 1 for each observation
+# fix potential label inversion problem (may not always occur)
+prob15 <- ifelse(mod15=="1", prob15, 1-prob15)
+# matrix of probabilities for test grid in two dimensions
+probm15 <- matrix(prob15, g, g)
+# set the margin parameter of the plot
+par(mar=rep(2,4))
+contour(x1test, x2test, probm15, levels=0.5, labels="", xlab="X1", ylab="X2", main=
+          "15-nearest neighbour", axes=FALSE) #Adding the KNN decision boundary to the plot
+points(train, col=ifelse(y==1, "orange", "blue"))
+lines(bayes, type="l", lty=2, lwd=2, col="purple") #Adding the Bayes decision boundary to the plot
+points(test, pch=".", cex=1.2, col=ifelse(probm15>0.5, "orange", "blue"))
+box()
+
+# k=3
+mod3 <- knn(s.train, s.test,y, k=3, prob=TRUE)
+prob3 <- attr(mod3, "prob")
+prob3 <- ifelse(mod3=="1", prob3, 1-prob3)
+probm3 <- matrix(prob3, g, g)
+par(mar=rep(2,4))
+contour(x1test, x2test, probm3, levels=0.5, labels="", xlab="X1", ylab="X2", main=
+          "3-nearest neighbour", axes=FALSE)
+points(train, col=ifelse(y==1, "orange", "blue"))
+bayestest= data.frame(x1test,-b1*x1test/b2)
+lines(bayestest, type="l", lty=2, lwd=2, col="purple")
+points(test, pch=".", cex=1.2, col=ifelse(probm3>0.5, "orange", "blue"))
+box()
+
+# k=10
+mod10 <- knn(s.train, s.test,y, k=10, prob=TRUE)
+prob10 <- attr(mod10, "prob")
+prob10 <- ifelse(mod10=="1", prob10, 1-prob10)
+probm10 <- matrix(prob10, g, g)
+par(mar=rep(2,4))
+contour(x1test, x2test, probm10, levels=0.5, labels="", xlab="X1", ylab="X2", main=
+          "10-nearest neighbour", axes=FALSE)
+points(train, col=ifelse(y==1, "orange", "blue"))
+bayestest2= data.frame(test[,1], -b1*test[,1]/b2)
+lines(bayestest2, type="l", lty=2, lwd=2, col="purple")
+# the same baysian decision boundary, just different ways of drawing
+points(test, pch=".", cex=1.2, col=ifelse(probm10>0.5, "orange", "blue"))
+box()
+
+# Generate the true classes for test data
+z.test = b1*test[,1] + b2*test[,2]
+pr.test = 1/(1+exp(-z.test))
+y.test = as.factor(rbinom(length(pr.test),1,pr.test))
+# Test error rates
+table(mod3,y.test) #K=3
+mean(mod3!=y.test) #0.06
+
+table(mod10,y.test) #k=10
+mean(mod10!=y.test) #0.0532 (which is the closest to Bayes 0.5)
+
+table(mod15,y.test) #k=15
+mean(mod15!=y.test) #0.0576
+
+################################# CHAPTER 4 QUESTION 10 Page 185 #####################################
+
+install.packages("ISLR") #Data for an Introduction to Statistical Learning with Applications in R
+library(ISLR)
+
+data("Weekly") #Weekly percentage returns for the S&P 500 stock index between 1990 and 2010
+
+#a) Produce some numerical and graphical summaries of the Weekly data. Do any patterns appear?
+names(Weekly)
+dim(Weekly)
+summary(Weekly)
+pairs(Weekly) #A matrix of scatterplots is produced.
+View(Weekly)
+
+#producing a matrix that contains all of the pairwise correlations among the predictors in a data set, excluding categorical variables
+cor(Weekly[,-9]) #corr excluding direction
+#correlation between is very close to zero as expected
+#there is however corr between Year and Volume
+
+attach(Weekly)
+plot(Volume) #Volume has increased over time
+
+#b) LOGISTIC REGRESSION
+
+#The glm() function fits generalized linear models, a class of models that includes logistic regression. 
+#The syntax of the glm() function is similar to that of lm(), except that we must pass in linear model the argument
+# family=binomial in order to tell R to run a logistic regression rather than some other type of generalized linear model.
+
+glm.fits=glm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume,data=Weekly,family =binomial)
+summary (glm.fits)
+
+coef(glm.fits) #to access just the coefficients
+summary(glm.fits)$coef[,4] #p-values for the coefficients
+
+#c) Compute the confusion matrix and overall fraction of correct predictions. 
+#Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
+
+#Predicting the probability that the market will go up
+glm.probs =predict(glm.fits,type ="response") 
+#type="response" tells R to output probabilities of the form P(Y = 1|X), as opposed
+# to other information such as the logit.
+glm.probs [1:10] #1st 10 probabilities
+#Is that the prob of going up or down?
+contrasts(Direction) #indicates that R has created a dummy variable with a 1 for Up
+
+#Converting these predicted probabilities into class labels, Up or Down.
+glm.pred=rep("Down",1089) #create a vector of 1089 (dimension of data) "Down" elements
+glm.pred[glm.probs>0.5]=" Up" #transforms to Up all of the elements for which the predicted probability of a
+# market increase exceeds 0.5.
+
+table(glm.pred, Direction) #Confusion table
+(54+557)/1089 #how many observations were correctly classified.
+mean(glm.pred==Direction) #compute the fraction of days for which the prediction was correct
+#In this case the log regression correctly predicted the market 4.96% of the time. However, this result is misleading
+# because we trained and tested the model on the same set of 1089 observations.100-4.96=95.04% is the training error rate. 
+# The training error rate is often overly optimistic it tends to underestimate the test error rate. 
+
+#In order to better assess the accuracy of the logistic regression model in this setting, we can fit the model
+#using part of the data, and then examine how well it predicts the held out data. 
+#This will yield a more realistic error rate, in the sense that in practice we will be interested in our models performance 
+# not on the data that we used to fit the model, but rather on days in the future for which the markets movements are unknown.
+
+#d) Fitting the logistic regression model using a training data period from 1990 to 2008, with Lag2 as the only predictor. 
+#Compute the confusion matrix and the overall fraction of correct predictions for the held out data (2009 and 2010).
+train=(Year<2008) #creating a vector with obs till 2008; #train is a Boolean vector, since its elements are TRUE and FALSE.
+head(train) #just checking; #Boolean vectors are great to obtain a subset of a matrix
+#Weekly[train,] would pick out a submatrix of the stock market data set, corresponding only to the dates before 2005
+Weekly.2008=Weekly[!train,] #using this vector to create a held out data set of observations from 2008.
+dim(Weekly.2008)
+Direction.2008=Direction[!train]
+
+glm.fits=glm(Direction~Lag2,data=Weekly,family=binomial,subset=train) #fitting a log reg to a subsample with subset argument
+glm.probs=predict(glm.fits,Weekly.2008,type="response") #obtaining the predictions for the test data set
+
+glm.pred=rep("Down",156)
+glm.pred[glm.probs>0.5]="Up"
+table(glm.pred,Direction.2008)
+mean(glm.pred==Direction.2008) #55.128% of the days the model was correct in the training set; Thus, training error rate=44.872%
+mean(glm.pred!=Direction.2008) #Test set error rate=44.872% which is worse than random guessing.
+
+#e) Repeat d) using LINEAR DISCRIMINANT ANALYSIS (LDA).
+library (MASS) #LDA (and QDA) is a part of the MASS library
+lda.fit=lda(Direction~Lag2,data=Weekly,subset=train)
+lda.fit #p1 = 0.442 and p2 = 0.558 #µ as the group means provided
+plot(lda.fit)
+
+lda.pred=predict(lda.fit,Weekly.2008)
+names(lda.pred) #returns a list with three elements. The first element:class, contains LDAs predictions about the market movement 
+#The second element, posterior, is a matrix whose kth column contains the posterior probability that the corresponding observation 
+# belongs to the kth class. Finally, x contains the linear discriminants.
+lda.class=lda.pred$class
+table(lda.class,Direction.2008) #As we can see the log reg and the LDA are very similar
+mean(lda.class==Direction.2008) #54.487% the model was correct
+#Thus test set error rate = 45.513%
+
+sum(lda.pred$posterior[,1]>=.5) # #Down predictions
+sum(lda.pred$posterior[,1]<.5) # #Up predictions
+
+lda.pred$posterior[1:20,1] #posterior probability output by the model corresponds to the probability that the market will decrease
+lda.class[1:20]
+
+#suppose that we wish to predict a market decrease only if we are very certain that the market will indeed decrease on that day -
+# say, if the posterior probability is at least 90%:
+sum(lda.pred$posterior[,1]>.9) #no days in 2009 and 2010 meet that threeshold
+
+#f) Repeat (d) using QUADRATIC  DISCRIMINANT ANALYSIS (QDA)
+qda.fit=qda(Direction~Lag2,data=Weekly,subset=train)
+qda.fit
+
+qda.class=predict(qda.fit,Weekly.2008)$class
+table(qda.class,Direction.2008)
+mean(qda.class==Direction.2008) #53.846% the model was correct (fraction of correct predictions for the held out data (2009 and 2010)
+#Thus test set error rate = 46.154%
+
+#g) Repeat (d) using KNN with K = 1.
+#(KNN): Rather than a two-step approach in which we first fit the model and then we use the model to make
+# predictions, knn() forms predictions using a single command.
+
+train.X=cbind(Lag1,Lag2)[train ,] #Matrix containing the predictors associated with the training data
+test.X=cbind(Lag1,Lag2)[!train ,] #Matrix containing the predictors associated with the test data
+train.Direction=Direction[train] #Vector containing the class labels for the training observations
+
+#If several observations are tied as nearest neighbors, then R will randomly break the tie. 
+#Therefore, a seed must be set in order to ensure reproducibility of results.
+set.seed(1)
+knn.pred=knn(train.X,test.X,train.Direction,k=1)
+table(knn.pred,Direction.2008)
+mean(knn.pred==Direction.2008)
+
+#h) Which of these methods appears to provide the best results on this data?
+
+#(i) Experiment with different combinations of predictors, including possible transformations and interactions, for each of the
+#methods. Report the variables, method, and associated confusion matrix that appears to provide the best results on the held
+#out data. Note that you should also experiment with values for K in the KNN classifier.
+
+# CLEAN UP #################################################
+
+# Clear environment
+rm(list = ls()) 
+
+# Clear packages
+p_unload(all)  # Remove all add-ons
+
+# Clear console
+cat("\014")  # ctrl+L
+
+# Clear mind :)
